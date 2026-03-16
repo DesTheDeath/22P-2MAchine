@@ -1,11 +1,18 @@
+import subprocess
+
 import telebot
 import requests
 import json
+from PIL import Image
+import io
+import os
 
 # Telegram Bot Token (replace with yours)
 TELEGRAM_BOT_TOKEN = "Telebot:Key"
 # KoboldCPP API Endpoint
 KOBOLDCPP_API_URL = "http://127.0.0.1:5001/api/v1/generate"
+
+MMPROJ_COMMAND = "/path/to/mmproj"
 
 # Persona / Context
 username = "Пользователь"
@@ -31,6 +38,28 @@ def handle_message(message):
 
     if user_id not in conversation_history:
         conversation_history[user_id] = PERSONA  # Initialize with persona
+
+    if message.content_type == 'photo':
+        # Process Image
+        file_info = bot.get_file(message.photo[-1].file_id)  # Get largest photo size
+        downloaded_file = bot.download_file(file_info.file_path)
+        img = Image.open(io.BytesIO(downloaded_file))
+
+        # Run mmproj to get visual description
+        process = subprocess.Popen([MMPROJ_COMMAND, "--image", "temp.png"], stdout=subprocess.PIPE)
+        img.save("temp.png")
+        visual_description = process.communicate()[0].decode("utf-8").strip()
+        prompt = PERSONA + " The image shows: " + visual_description
+        if message.caption:
+            prompt += " " + message.caption  # Add caption if exists
+
+
+    else:  # Text Message
+        prompt = PERSONA + " " + message.text
+        if user_id not in conversation_history:
+            conversation_history[user_id] = prompt
+        else:
+            conversation_history[user_id] += "\n" + message.text
 
     full_prompt = conversation_history[user_id] + "<end_of_turn>\n<start_of_turn>user\n" + user_text + "<end_of_turn>\n<start_of_turn>model\n"
 
