@@ -180,7 +180,7 @@ def get_main_keyboard():
     )
 
 
-# Buttons defination
+# Создание кнопок
 btn_start = telebot.types.KeyboardButton('/start')
 btn_help = telebot.types.KeyboardButton('/help')
 btn_toxic = telebot.types.KeyboardButton('/toxic')
@@ -194,6 +194,7 @@ silent.add(btn_toxic, btn_profile)
 silent.add(btn_stats, btn_ai)
 
 
+"""Переключение в режим ИИ"""
 @bot.message_handler(commands=['ai'])
 def ai_command(message):
     global ai_mode
@@ -205,6 +206,7 @@ def ai_command(message):
         parse_mode='Markdown'
     )
 
+"""Переключение в режим Определителя токсичности"""
 @bot.message_handler(commands=['toxic'])
 def toxic_command(message):
     global ai_mode
@@ -216,8 +218,12 @@ def toxic_command(message):
         parse_mode='Markdown'
     )
 
-@bot.message_handler(func=lambda message: True)  # Handle all messages
+@bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    """Основной метод для ИИ бота
+        Включает в себя отправку промпта на локальный сервер KoboldCPP по его API
+        и получение ответа.
+    """
     if ai_mode:
         # KoboldCPP API Endpoint
         KOBOLDCPP_API_URL = "http://127.0.0.1:5001/api/v1/generate"
@@ -231,14 +237,15 @@ def handle_message(message):
         user_text = message.text
         username = message.from_user.first_name
 
-        conversation_history = {}
+        conversation_history = {} # Словарь, История переписки
 
         if user_text == "/start":
-            bot.reply_to(message, "Здраствуйте, чем могу помочь?")
+            bot.reply_to(message, "Здраствуйте, чем могу помочь?") # при запуске выводится
+            # сообщение, но не создаётся промт
             return
 
         if user_id not in conversation_history:
-            conversation_history[user_id] = PERSONA  # Initialize with persona
+            conversation_history[user_id] = PERSONA  # Это персона для бота, отправляется вместе с промтом пользователя
 
         full_prompt = conversation_history[user_id] + "<end_of_turn>\n<start_of_turn>user\n" + user_text + "<end_of_turn>\n<start_of_turn>model\n"
 
@@ -256,18 +263,18 @@ def handle_message(message):
         try:
             response = requests.post(KOBOLDCPP_API_URL, headers={'Content-Type': 'application/json'},
                                      data=json.dumps(payload))
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
             data = response.json()
             generated_text = data["results"][0]["text"]
-            bot_reply = f"{generated_text}"  # Construct the reply
-            bot.reply_to(message, bot_reply)
-            conversation_history[user_id] += "\n" + generated_text  # Добавляет ответ бота в контест
+            bot_reply = f"{generated_text}"  # Ответ от ИИ
+            bot.reply_to(message, bot_reply) # отправка ответа на сообщение пользлвателя
+            conversation_history[user_id] += "\n" + generated_text  # Добавляет ответ бота в историю
         except requests.exceptions.RequestException as e:
             print(f"Error connecting to KoboldCPP: {e}")
             bot.reply_to(message, "Сервер сейчас недоступен. Попробуйте позже.")
 
     else:
-        # Toxicity Classification Mode
+        # Режим определителя токсичности
         try:
             bot.send_chat_action(message.chat.id, 'typing')
 
